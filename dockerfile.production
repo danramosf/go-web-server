@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+###
+### This docker file compiles and runs a simple golang webserver
+### The port should be passed in as a parameter, assuming its set as an env variable
+### Image build exemple (PowerShell): 
+### ### docker build --build-arg PORT=$env:PORT --tag go-web-server -f dockerfile.production .
+### Docker run example (PowerShell):
+### ### docker run -it -p $env:PORT`:$env:PORT go-web-server
+### Where $env:PORT is set to the desired port (3030)
+ARG PORT
+# Build
+FROM golang:1.16-buster AS build
+#... Creating prod user, app folder and granting permissions
+ENV APP_USER produser
+ENV APP_HOME /go/src/app
+RUN groupadd $APP_USER && useradd -m -g $APP_USER -l $APP_USER
+RUN mkdir -p $APP_HOME && chown -R $APP_USER:$APP_USER $APP_HOME
+WORKDIR $APP_HOME
+USER $APP_USER
+#... Copying application files 
+COPY go.mod ./
+RUN go mod download
+COPY main.go ./
+#... building
+RUN go build -o go-web-server
+
+# Deploy
+FROM gcr.io/distroless/base-debian10
+ENV APP_HOME /go/src/app
+WORKDIR $APP_HOME
+# Copy from build
+COPY --chown=0:0 --from=build $APP_HOME/go-web-server $APP_HOME
+# Exposing port from environment variable.
+# Docker build command should be run passing the environment variable 'PORT'
+EXPOSE $PORT
+USER $APP_USER:$APP_USER
+
+CMD ["./go-web-server"]
